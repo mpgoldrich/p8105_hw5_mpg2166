@@ -98,3 +98,66 @@ test_results %>%
 ```
 
 This figure suggests a very wide range in the rate at which homicides are solved -- Chicago is noticeably high and, given the narrowness of the CI, likely is the location of many homicides. 
+
+
+## Problem 2
+
+For this problem, we are using data from longitudinal study that included a control arm and an experimental arm.
+
+Start with a dataframe containing all file names:
+
+```{r}
+file_names_df =
+  as_tibble(list.files(path = "data/prob2", full.names = TRUE))
+```
+
+Iterate over file names and read in data for each subject using `purrr::map` and saving the result as a new variable in the dataframe:
+
+```{r}
+longitudinal_df =
+  file_names_df |> 
+  mutate(data = map_dfr(file_names_df, read_csv))
+```
+
+Tidy the result:
+
+```{r}
+longitudinal_df =
+  longitudinal_df |> 
+  mutate(
+    arm = str_extract(value, "(con|exp)"),
+    subject_id = str_extract(value, "(01|02|03|04|05|06|07|08|09|10)"),
+    week_1 = data$week_1,
+    week_2 = data$week_2,
+    week_3 = data$week_3,
+    week_4 = data$week_4,
+    week_5 = data$week_5,
+    week_6 = data$week_6,
+    week_7 = data$week_7,
+    week_8 = data$week_8,
+  ) |> 
+  select(arm, subject_id, week_1:week_8) |> 
+  pivot_longer(
+    week_1:week_8,
+    names_to = "obs_week",
+    values_to = "obs_value"
+  ) |> 
+  mutate(obs_week = str_replace(obs_week, "week_", ""))
+```
+
+I pivoted longer in order to make the below spaghetti plot!
+
+```{r}
+longitudinal_df |> 
+  ggplot(aes(x = obs_week, y = obs_value, color = subject_id)) +
+  geom_line(aes(group = subject_id)) +
+  facet_grid(. ~ arm) +
+  labs(
+    title = "Spaghetti plot of each subject observations over time by experimental arm")
+```
+
+The observations of the subjects in the control arm appeared to stay fairly consistent over the 8 week observation period, with some fluctuation. The subjects in the experimental group saw a general increase in the measured observation value over the 8 week period. We can infer that the experimental exposure has a positive association with the outcome of interest.
+
+
+## Problem 3
+
