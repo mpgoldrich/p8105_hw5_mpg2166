@@ -8,6 +8,8 @@ output: github_document
 library(tidyverse)
 library(p8105.datasets)
 library(viridis)
+library(patchwork)
+
 
 knitr::opts_chunk$set(
 	echo = TRUE,
@@ -26,6 +28,12 @@ scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
 
 theme_set(theme_minimal() + theme(legend.position = "bottom"))
+```
+
+Set seed for reproducibility.
+
+```{r}
+set.seed(12345)
 ```
 
 ## Problem 1
@@ -161,3 +169,98 @@ The observations of the subjects in the control arm appeared to stay fairly cons
 
 ## Problem 3
 
+Run the simulation with mu = 0.
+
+```{r}
+sim_t_test = function(mu, n_obs = 30, sigma = 5) {
+  
+  sim_data = tibble(
+    x = rnorm(n = n_obs, mean = mu, sd = sigma)
+  )
+  
+  t_test_result = 
+    t.test(sim_data) |> 
+    broom::tidy() |> 
+    select(estimate, p.value)
+
+}
+
+sim_results_df =
+  expand_grid(
+    mu = 0,
+    iter = 1:5000
+  ) |> 
+  mutate(
+    t_test_df = map(mu, sim_t_test)
+  ) |> 
+  unnest(t_test_df)
+```
+
+Repeat for mu = {1, 2, 3, 4, 5, 6}.
+
+```{r}
+sim_results_df =
+  expand_grid(
+    mu = c(0, 1, 2, 3, 4, 5, 6),
+    iter = 1:5000
+  ) |> 
+  mutate(
+    t_test_df = map(mu, sim_t_test)
+  ) |> 
+  unnest(t_test_df)
+```
+
+Make a plot showing the proportion of times the null was rejected (power) and the true value of mu on the x axis.
+
+```{r}
+sim_results_df =
+  sim_results_df |> 
+  mutate(
+    reject_null = case_when(
+      p.value < 0.05  ~ "Yes",
+      p.value >= 0.05 ~ "No"))
+
+sim_results_df |> 
+  ggplot(aes(x = factor(mu), fill = reject_null)) +
+  geom_bar(stat = "count", position = "stack") +
+  labs(
+    title = "Power vs. True Mean",
+    x = "True Mean",
+    y = "Count",
+    fill = "Rejected Null")
+```
+
+The above plot shows that power increases with effect size. As the true mean increases from 0, so does the likelihood of rejecting the null hypothesis of mu = 0.
+
+```{r}
+true_vs_sample_plot = 
+  sim_results_df |> 
+  group_by(mu) |> 
+  summarize(
+    mean_estimate = mean(estimate)) |> 
+  ggplot(aes(x = mu, y = mean_estimate)) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "True Mean vs. Average Sample Mean Estimate",
+    x = "True Mean",
+    y = "Average Sample Mean Estimate")
+
+rejected_null_plot =
+  sim_results_df |> 
+  filter(reject_null == "Yes") |> 
+  group_by(mu) |> 
+  summarize(
+    mean_estimate = mean(estimate)) |> 
+  ggplot(aes(x = mu, y = mean_estimate)) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "True Mean vs. Average Sample Mean Estimate (Null Rejected)",
+    x = "True Mean",
+    y = "Average Sample Mean Estimate")
+
+true_vs_sample_plot + rejected_null_plot
+```
+
+The above plots show the average sample mean estimate vs. the true mean, among all samples and only among samples for which the null hypothesis was rejected. In the latter subset, when the true mean is low (mu = 1 or 2), the average sample mean estimate is slightly greater than the true mean. This is because these tests have less power, so it takes a larger sample mean to reject the null. 
